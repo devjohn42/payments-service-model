@@ -12,7 +12,7 @@ export class PaymentQueueService {
 	constructor(private readonly rabbitMQService: RabbitmqService) {}
 
 	async consumePaymentOrders(callback: (message: any) => Promise<void>): Promise<void> {
-		this.logger.log('📡 Setting up paymeny orders consumer...')
+		this.logger.log('📡 Setting up payment orders consumer...')
 
 		await this.rabbitMQService.subscribeToQueue(
 			this.QUEUE_NAME,
