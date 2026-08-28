@@ -18,6 +18,20 @@ export class RabbitmqService implements OnModuleInit, OnModuleDestroy {
 		await this.disconnect()
 	}
 
+	async waitForConnection(maxAttemps = 10, delayMs = 500): Promise<boolean> {
+		for (let attempt = 1; attempt <= maxAttemps; attempt++) {
+			if (this.channel) {
+				return true
+			}
+
+			this.logger.log(
+				`⏳ Waiting for RabbitMQ connection... (attempt ${attempt}/${maxAttemps})`
+			)
+			await new Promise((resolve) => setTimeout(resolve, delayMs))
+		}
+		return false
+	}
+
 	private async connect() {
 		try {
 			const rabbitmqUrl = this.configService.get<string>(

@@ -7,7 +7,7 @@ export class PaymentQueueService {
 
 	private readonly ROUTING_KEY = 'payment.order'
 	private readonly EXCHANGE = 'payments'
-	private readonly QUEUE_NAME = 'payment.queue'
+	private readonly QUEUE_NAME = 'payment_queue'
 
 	constructor(private readonly rabbitMQService: RabbitmqService) {}
 
