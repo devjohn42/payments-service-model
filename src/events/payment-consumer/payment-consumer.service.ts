@@ -3,8 +3,42 @@ import { PaymentQueueService } from '../payment-queue/payment-queue.service'
 import { PaymentOrderMessage } from '../payment-queue.interface'
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service'
 
+export interface ConsumerMetrics {
+	totalProcessed: number
+	totalSuccess: number
+	totalFailed: number
+	totalRetries: number
+	lastProcessedAt: Date | null
+	startedAt: Date
+	averageProcessingTime: number
+}
+
 @Injectable()
 export class PaymentConsumerService implements OnModuleInit {
+	/**
+	 * ===============================================
+	 * MÉTRICAS DE MONITORAMENTO
+	 * ===============================================
+	 *
+	 * Armazena estatísticas de processamento em memória
+	 * Em produção, usaríamos Prometheus, DataDog, etc.
+	 */
+
+	private metrics: ConsumerMetrics = {
+		totalProcessed: 0,
+		totalSuccess: 0,
+		totalFailed: 0,
+		totalRetries: 0,
+		lastProcessedAt: null,
+		startedAt: new Date(),
+		averageProcessingTime: 0
+	}
+	/**
+	 * Acumulador para calcular tempo médio de processamento
+	 * Guardamos a soma total para não precisar armazenar todos os tempos
+	 */
+	private totalProcessingTime = 0
+
 	private readonly logger = new Logger(PaymentConsumerService.name)
 
 	constructor(
@@ -14,6 +48,7 @@ export class PaymentConsumerService implements OnModuleInit {
 
 	async onModuleInit() {
 		this.logger.log('🚀 Starting Payment Consumer Service')
+		this.metrics.startedAt = new Date()
 		await this.startConsuming()
 	}
 
@@ -40,6 +75,7 @@ export class PaymentConsumerService implements OnModuleInit {
 	}
 
 	private async processPaymentOrder(message: PaymentOrderMessage): Promise<void> {
+		const startTime = Date.now()
 		try {
 			this.logger.log(
 				`📝 Processing payment order: ` +
@@ -54,7 +90,9 @@ export class PaymentConsumerService implements OnModuleInit {
 			}
 
 			this.logger.log('✅ Payment order received and validated')
+			this.updateMetrics(true, startTime)
 		} catch (error) {
+			this.updateMetrics(false, startTime)
 			this.logger.error(
 				`❌ Failed to process payment for order ${message.orderId}: `,
 				error
@@ -91,5 +129,66 @@ export class PaymentConsumerService implements OnModuleInit {
 		}
 
 		return true
+	}
+
+	private updateMetrics(success: boolean, startTime: number): void {
+		const processingTime = Date.now() - startTime
+
+		this.metrics.totalProcessed++
+		this.metrics.lastProcessedAt = new Date()
+
+		if (success) {
+			this.metrics.totalSuccess++
+		} else {
+			this.metrics.totalFailed++
+		}
+
+		this.totalProcessingTime += processingTime
+		this.metrics.averageProcessingTime = Math.round(
+			this.totalProcessingTime / this.metrics.totalProcessed
+		)
+
+		if (this.metrics.totalProcessed % 10 === 0) {
+			this.logMetricsSummary()
+		}
+	}
+
+	incrementRetryCount(): void {
+		this.metrics.totalRetries++
+	}
+
+	private logMetricsSummary(): void {
+		const successRate =
+			this.metrics.totalProcessed > 0
+				? ((this.metrics.totalSuccess / this.metrics.totalProcessed) * 100).toFixed(2)
+				: 0
+
+		this.logger.log('📊 ====== CONSUMER METRICS ======')
+		this.logger.log(`   Total Processed: ${this.metrics.totalProcessed}`)
+		this.logger.log(`   Success: ${this.metrics.totalSuccess}`)
+		this.logger.log(`   Failed: ${this.metrics.totalFailed}`)
+		this.logger.log(`   Retries: ${this.metrics.totalRetries}`)
+		this.logger.log(`   Success Rate: ${successRate}`)
+		this.logger.log(`   Acg Processing Time: ${this.metrics.averageProcessingTime}ms`)
+		this.logger.log(`📊===============================`)
+	}
+
+	getMetrics(): ConsumerMetrics {
+		return { ...this.metrics }
+	}
+
+	resetMetrics(): void {
+		this.metrics = {
+			totalProcessed: 0,
+			totalSuccess: 0,
+			totalFailed: 0,
+			totalRetries: 0,
+			lastProcessedAt: null,
+			startedAt: new Date(),
+			averageProcessingTime: 0
+		}
+
+		this.totalProcessingTime = 0
+		this.logger.log('🔄️ Metrics reset')
 	}
 }
