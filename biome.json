@@ -54,7 +54,8 @@
 			"recommended": true,
 			"style": {
 				"noNonNullAssertion": "off",
-				"useImportType": "off"
+				"useImportType": "off",
+				"useTemplate": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off"
